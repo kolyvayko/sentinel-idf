@@ -3,8 +3,8 @@
  * Simple I2C example for SSD1306 driver
  * Initializes display, draws some primitives, and flushes to screen.
  */
-#include "adc.h"
-#include "display.h"
+#include "adc/adc.h"
+#include "display/display.h"
 #include <esp_log.h>
 
 static const char *TAG = "MAIN";
