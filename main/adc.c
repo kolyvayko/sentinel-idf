@@ -15,7 +15,7 @@
 #define EXAMPLE_READ_LEN 256
 
 static adc_channel_t channel[2] = {ADC_CHANNEL_1,
-                                   ADC_CHANNEL_2}; // GPIO32, GPIO33
+                                   ADC_CHANNEL_2}; // GPIO1, GPIO2 ESP32C6
 
 static TaskHandle_t s_task_handle;
 static const char *TAG = "ADC";

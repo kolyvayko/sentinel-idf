@@ -78,7 +78,7 @@ void display_show_data(ssd1306_handle_t d, int val1, int val2) {
   ESP_ERROR_CHECK(ssd1306_clear(d));
 
   char text[30];
-  sprintf(text, "ADC1: %d\nADC2: %d", val1, val2);
+  sprintf(text, "PH: %d\nSTR: %d", val1, val2);
   ESP_ERROR_CHECK(ssd1306_draw_text_scaled(d, 0, 0, text, true, 2));
 
   ESP_ERROR_CHECK(ssd1306_display(d));
