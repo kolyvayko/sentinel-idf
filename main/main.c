@@ -4,6 +4,7 @@
  * Initializes display, draws some primitives, and flushes to screen.
  */
 #include "adc/adc.h"
+#include "app_config.h"
 #include "display/display.h"
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
@@ -12,13 +13,6 @@
 #include <stdint.h>
 
 static const char *TAG = "MAIN";
-
-#define DISPLAY_UPDATE_INTERVAL 100
-#define ADC_QUEUE_LENGTH 1
-#define ADC_TASK_STACK_SIZE 4096
-#define ADC_TASK_PRIORITY 5
-#define DISPLAY_TASK_STACK_SIZE 4096
-#define DISPLAY_TASK_PRIORITY 4
 
 typedef struct {
   int adc1;
