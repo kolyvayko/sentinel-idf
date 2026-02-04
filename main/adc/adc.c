@@ -73,6 +73,7 @@ adc_continuous_handle_t adc_init() {
 }
 
 void adc_read_values(adc_continuous_handle_t handle, int *adc1, int *adc2) {
+
   esp_err_t ret;
   uint32_t ret_num = 0;
   uint8_t result[EXAMPLE_READ_LEN] = {0};
@@ -83,9 +84,9 @@ void adc_read_values(adc_continuous_handle_t handle, int *adc1, int *adc2) {
    * the task is fast. However in this example, the data processing (print) is
    * slow, so you barely block here.
    *
-   * Without using this event callback (to notify this task), you can still just
-   * call `adc_continuous_read()` here in a loop, with/without a certain block
-   * timeout.
+   * Without using this event callback (to notify this task), you can still
+   * just call `adc_continuous_read()` here in a loop, with/without a certain
+   * block timeout.
    */
   ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
@@ -101,9 +102,9 @@ void adc_read_values(adc_continuous_handle_t handle, int *adc1, int *adc2) {
     if (parse_ret == ESP_OK) {
       for (int i = 0; i < num_parsed_samples; i++) {
         if (parsed_data[i].valid) {
-          ESP_LOGI(TAG, "ADC%d, Channel: %d, Value: %" PRIu32,
-                   parsed_data[i].unit + 1, parsed_data[i].channel,
-                   parsed_data[i].raw_data);
+          // ESP_LOGI(TAG, "ADC%d, Channel: %d, Value: %" PRIu32,
+          //          parsed_data[i].unit + 1, parsed_data[i].channel,
+          //          parsed_data[i].raw_data);
           if (parsed_data[i].channel == ADC_CHANNEL_1) {
             *adc1 = parsed_data[i].raw_data;
           } else if (parsed_data[i].channel == ADC_CHANNEL_2) {
