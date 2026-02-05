@@ -87,3 +87,26 @@ void display_show_data(ssd1306_handle_t d, int val1, int val2) {
   ESP_LOGI(TAG, "Display updated with ADC: %d, %d", val1, val2);
   vTaskDelay(pdMS_TO_TICKS(100)); // Delay 100ms between updates
 }
+
+
+    // IN main.c display example usage:
+// // ----- Draw pixels in corners of screen -----
+// ESP_ERROR_CHECK(ssd1306_draw_pixel(d, 0, 0, true));
+// ESP_ERROR_CHECK(ssd1306_draw_pixel(d, cfg.width - 1, 0, true));
+// ESP_ERROR_CHECK(ssd1306_draw_pixel(d, 0, cfg.height - 1, true));
+// ESP_ERROR_CHECK(ssd1306_draw_pixel(d, cfg.width - 1, cfg.height - 1, true));
+
+// // ----- Draw rectangles -----
+// ESP_ERROR_CHECK(ssd1306_draw_rect(d, 2, 2, 40, 20, false));
+// ESP_ERROR_CHECK(ssd1306_draw_rect(d, 2, 24, 32, 16, true));
+
+// // ----- Draw circles -----
+// ESP_ERROR_CHECK(ssd1306_draw_circle(d, 32, 52, 8, true));
+// ESP_ERROR_CHECK(ssd1306_draw_circle(d, 100, 52, 4, false));
+
+// // ----- Draw lines -----
+// ESP_ERROR_CHECK(ssd1306_draw_line(d, 2, 2, 40, 20, true));
+// ESP_ERROR_CHECK(ssd1306_draw_line(d, 32, 52, 100, 52, true));
+
+// ----- Draw text -----
+// ESP_ERROR_CHECK(ssd1306_draw_text(d, 48, 2, "OK!", true));
