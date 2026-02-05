@@ -1,26 +1,17 @@
 dependencies:
-  chill-sam/ssd1306:
-    component_hash: 6be33faa92d913d198ef61f70d58708c4cebd5c93e74cf3e2a43446877cf04f6
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=5.3'
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    targets:
-    - esp32
-    - esp32s2
-    - esp32s3
-    - esp32c3
-    version: 1.1.2
   idf:
     source:
       type: idf
     version: 5.5.2
+  ssd1306:
+    dependencies: []
+    source:
+      path: /Users/oleksiikolyvaiko/esp/sentinel-idf/components/ssd1306
+      type: local
+    version: 1.1.2
 direct_dependencies:
-- chill-sam/ssd1306
+- components/ssd1306
 - idf
-manifest_hash: da69600012bb83c59da1c7c1ac1b4806860cc4cb16de73545583ca1daefea8f7
+manifest_hash: c3639bd1eb56f2c9ede6c7311fd82c48bfc2ea6648e604058cb89adb97d1f7c3
 target: esp32c6
 version: 2.0.0
