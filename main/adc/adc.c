@@ -1,5 +1,5 @@
 #include "adc.h"
-#include <driver/adc.h>
+#include <esp_adc/adc_continuous.h>
 #include <esp_err.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
