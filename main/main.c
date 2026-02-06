@@ -7,6 +7,7 @@
 #include "app_config.h"
 #include "direction/direction.h"
 #include "display/display.h"
+#include "servo/servo.h"
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
@@ -22,6 +23,37 @@ typedef struct {
 
 static QueueHandle_t s_sample_queue = NULL;
 static QueueHandle_t s_adc1_queue = NULL;
+static QueueHandle_t s_servo_queue = NULL;
+
+static bool adc1_get_latest(int *out_value, TickType_t timeout_ticks) {
+  if (out_value == NULL) {
+    return false;
+  }
+
+  int value = 0;
+  if (xQueueReceive(s_adc1_queue, &value, timeout_ticks) != pdPASS) {
+    return false;
+  }
+
+  while (xQueueReceive(s_adc1_queue, &value, 0) == pdPASS) {
+    // drain to latest
+  }
+
+  *out_value = value;
+  return true;
+}
+
+static void servo_task(void *param) {
+  servo_init();
+  servo_set_angle(SERVO_START_ANGLE_DEG);
+
+  int angle = SERVO_START_ANGLE_DEG;
+  for (;;) {
+    if (xQueueReceive(s_servo_queue, &angle, portMAX_DELAY) == pdPASS) {
+      servo_set_angle(angle);
+    }
+  }
+}
 
 static void queue_send_latest_int(QueueHandle_t queue, int value) {
   if (queue == NULL) {
@@ -83,6 +115,34 @@ static void display_task(void *param) {
 static void adc1_direction_task(void *param) {
   direction_state_t state;
   direction_init(&state);
+
+  int current_angle = SERVO_START_ANGLE_DEG;
+  queue_send_latest_int(s_servo_queue, current_angle);
+
+  // Scan sector -90..+90 (mapped to servo degrees 0..180) to find max signal
+  int best_angle = SERVO_START_ANGLE_DEG;
+  int best_value = -1;
+  for (int angle = SERVO_SCAN_MIN_DEG; angle <= SERVO_SCAN_MAX_DEG;
+       angle += SERVO_SCAN_STEP_DEG) {
+    current_angle = angle;
+    queue_send_latest_int(s_servo_queue, current_angle);
+    vTaskDelay(pdMS_TO_TICKS(SERVO_SETTLE_MS));
+
+    int value = 0;
+    if (adc1_get_latest(&value, pdMS_TO_TICKS(100))) {
+      if (value > best_value) {
+        best_value = value;
+        best_angle = angle;
+      }
+    }
+  }
+
+  current_angle = best_angle;
+  queue_send_latest_int(s_servo_queue, current_angle);
+  ESP_LOGI(TAG, "Scan complete. max_adc1=%d at angle=%d", best_value,
+           best_angle);
+
+  // Continuous tracking after initial scan
   for (;;) {
     int value = 0;
     if (xQueueReceive(s_adc1_queue, &value, portMAX_DELAY) != pdPASS) {
@@ -92,6 +152,12 @@ static void adc1_direction_task(void *param) {
     direction_t direction = DIRECTION_UNKNOWN;
     if (direction_update(&state, value, ADC1_THRESHOLD, ADC1_HYSTERESIS, &peak,
                          &direction)) {
+      if (direction == DIRECTION_INCREASING) {
+        current_angle += SERVO_STEP_DEG;
+      } else if (direction == DIRECTION_DECREASING) {
+        current_angle -= SERVO_STEP_DEG;
+      }
+      queue_send_latest_int(s_servo_queue, current_angle);
       ESP_LOGI(TAG, "ADC1 peak=%d direction=%s", peak,
                (direction == DIRECTION_INCREASING) ? "increasing"
                                                    : "decreasing");
@@ -102,13 +168,17 @@ static void adc1_direction_task(void *param) {
 void app_main(void) {
   s_sample_queue = xQueueCreate(ADC_QUEUE_LENGTH, sizeof(adc_sample_t));
   s_adc1_queue = xQueueCreate(ADC1_QUEUE_LENGTH, sizeof(int));
-  if (s_sample_queue == NULL || s_adc1_queue == NULL) {
+  s_servo_queue = xQueueCreate(SERVO_QUEUE_LENGTH, sizeof(int));
+  if (s_sample_queue == NULL || s_adc1_queue == NULL || s_servo_queue == NULL) {
     ESP_LOGE(TAG, "Failed to create ADC sample queue");
     if (s_sample_queue != NULL) {
       vQueueDelete(s_sample_queue);
     }
     if (s_adc1_queue != NULL) {
       vQueueDelete(s_adc1_queue);
+    }
+    if (s_servo_queue != NULL) {
+      vQueueDelete(s_servo_queue);
     }
     return;
   }
@@ -125,6 +195,16 @@ void app_main(void) {
     ESP_LOGE(TAG, "Failed to create display task");
     vQueueDelete(s_sample_queue);
     vQueueDelete(s_adc1_queue);
+    vQueueDelete(s_servo_queue);
+    return;
+  }
+
+  if (xTaskCreate(servo_task, "servo_task", SERVO_TASK_STACK_SIZE, NULL,
+                  SERVO_TASK_PRIORITY, NULL) != pdPASS) {
+    ESP_LOGE(TAG, "Failed to create servo task");
+    vQueueDelete(s_sample_queue);
+    vQueueDelete(s_adc1_queue);
+    vQueueDelete(s_servo_queue);
     return;
   }
 
@@ -133,6 +213,7 @@ void app_main(void) {
     ESP_LOGE(TAG, "Failed to create ADC1 direction task");
     vQueueDelete(s_sample_queue);
     vQueueDelete(s_adc1_queue);
+    vQueueDelete(s_servo_queue);
     return;
   }
 }
