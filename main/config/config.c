@@ -4,7 +4,6 @@
 #include <nvs_flash.h>
 #include <nvs.h>
 #include <esp_log.h>
-#include <string.h>
 
 static const char *TAG = "CONFIG";
 static const char *NVS_NS = "sentinel";
@@ -51,27 +50,48 @@ void config_init(void) {
 }
 
 uint16_t config_get_u16(cfg_param_id_t id) {
+    if (id >= CFG_PARAM_COUNT) {
+        ESP_LOGW(TAG, "config_get_u16: invalid id %d", id);
+        return 0;
+    }
     return s_values[id];
 }
 
 void config_set_u16(cfg_param_id_t id, uint16_t value) {
+    if (id >= CFG_PARAM_COUNT) {
+        ESP_LOGW(TAG, "config_set_u16: invalid id %d", id);
+        return;
+    }
     s_values[id] = value;
     nvs_handle_t h;
     if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
-        nvs_set_u16(h, s_keys[id], value);
-        nvs_commit(h);
+        esp_err_t err = nvs_set_u16(h, s_keys[id], value);
+        if (err == ESP_OK) {
+            err = nvs_commit(h);
+        }
         nvs_close(h);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "NVS write failed for %s: %s", s_keys[id], esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "saved %s = %u", s_keys[id], value);
+        }
+    } else {
+        ESP_LOGE(TAG, "NVS open failed for write");
     }
-    ESP_LOGI(TAG, "saved %s = %u", s_keys[id], value);
 }
 
 void config_auto_zero(int adc1_raw, int adc2_raw) {
+    // Clamp to valid 12-bit ADC range
+    if (adc1_raw < 0) adc1_raw = 0;
+    if (adc1_raw > 4095) adc1_raw = 4095;
     // Convert raw ADC to mV: 3300 mV / 4095 counts
     uint16_t mv1 = (uint16_t)((adc1_raw * 3300) / 4095);
     config_set_u16(CFG_VPHS_ZERO_MV, mv1);
     ESP_LOGI(TAG, "auto-zero: AZ=%umV", mv1);
 
 #if SENTINEL_ELEVATION_ENABLED
+    if (adc2_raw < 0) adc2_raw = 0;
+    if (adc2_raw > 4095) adc2_raw = 4095;
     uint16_t mv2 = (uint16_t)((adc2_raw * 3300) / 4095);
     config_set_u16(CFG_VPHS_ZERO2_MV, mv2);
     ESP_LOGI(TAG, "auto-zero: EL=%umV", mv2);
