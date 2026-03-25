@@ -285,7 +285,80 @@ thrust = SENTINEL_INTERCEPT_THRUST;       // максимальна тяга (0.
 
 ---
 
-## 10. Залежності (idf_component.yml)
+## 10. Калібрувальний інтерфейс
+
+### 10.1 Підхід
+
+Два механізми, що доповнюють один одного:
+
+| Механізм | Використання |
+|----------|-------------|
+| **MAVLink PARAM протокол** | Всі калібрувальні параметри — Mission Planner / QGC «Full Parameter List» |
+| **Кнопка auto-zero** | Швидке VPHS нуль-калібрування в полі без GCS |
+
+### 10.2 MAVLink PARAM протокол
+
+ESP32 реалізує MAVLink параметрів (ID: `PARAM_REQUEST_LIST`, `PARAM_SET`, `PARAM_VALUE`). Параметри зберігаються в NVS (namespace `"sentinel"`). При старті — завантаження з NVS, fallback на compile-time дефолти з `app_config.h`.
+
+**Калібрувальні параметри (видимі в Mission Planner):**
+
+| MAVLink param ID | NVS ключ | Тип | Дефолт | Опис |
+|-----------------|----------|-----|--------|------|
+| `SNT_VPHS_ZERO` | `vphs_zero` | `uint16` | 900 | VPHS нуль (мВ) для азимуту |
+| `SNT_VPHS_ZERO2` | `vphs_zero2` | `uint16` | 900 | VPHS нуль (мВ) для елевації |
+| `SNT_KP` | `kp` | `float` | 0.02 | P-controller gain |
+| `SNT_CR_PITCH` | `cr_pitch` | `float` | 5.0 | Cruise pitch (°) |
+| `SNT_CR_THRUST` | `cr_thrust` | `float` | 0.55 | Cruise thrust (0–1) |
+| `SNT_INT_PITCH` | `int_pitch` | `float` | 20.0 | Intercept pitch (°) |
+| `SNT_INT_THRUST` | `int_thrust` | `float` | 0.85 | Intercept thrust (0–1) |
+| `SNT_VMAG_THR` | `vmag_thr` | `float` | 0.85 | VMAG intercept threshold |
+| `SNT_SIG_THR` | `sig_thr` | `uint16` | 100 | Мінімальний сигнал (ADC counts) |
+| `SNT_FREQ_MHZ` | `freq_mhz` | `uint16` | 900 | Частота цілі (900 або 2400) |
+| `SNT_ANT_SPACE` | `ant_space` | `float` | 0.165 | Відстань між антенами (м) |
+
+`PARAM_SET` → оновлює NVS + поточне runtime значення → відповідає `PARAM_VALUE`. Зміна параметрів можлива лише в стані `IDLE` або `SEARCHING` (не під час активного трекінгу).
+
+### 10.3 Кнопка auto-zero (VPHS калібрування)
+
+**Фізично:** один GPIO (напр. GPIO9, конфігурується через `SENTINEL_CAL_BTN_GPIO`).
+
+**Процедура:**
+1. Дрон на горизонтальній поверхні, ціль прямо перед ним (азимут 0°)
+2. Утримувати кнопку 3 с в стані `IDLE` або `SEARCHING`
+3. ESP32 читає поточні середні значення VPHS₁ (і VPHS₂ якщо `SENTINEL_ELEVATION_ENABLED=1`)
+4. Записує в NVS як `SNT_VPHS_ZERO` (і `SNT_VPHS_ZERO2`)
+5. SSD1306 показує: `CAL OK: ZERO=912mV`
+
+**Захист:** кнопка ігнорується в стані `TRACKING` та `INTERCEPT`.
+
+### 10.4 Модуль `config/`
+
+Новий модуль `config/config.c` + `config/config.h`:
+
+```
+config_init()        — завантажити з NVS, fallback на app_config.h дефолти
+config_get_float()   — отримати float параметр за ID
+config_get_u16()     — отримати uint16 параметр за ID
+config_set()         — записати параметр в NVS + оновити runtime
+config_to_mavlink()  — серіалізація для PARAM_VALUE
+config_from_mavlink()— десеріалізація з PARAM_SET
+```
+
+Всі модулі (`bearing`, `navigator`) читають параметри через `config_get_*()` — ніколи не звертаються напряму до `app_config.h` для runtime-змінюваних значень.
+
+### 10.5 Розширення фаз для калібрування
+
+| Фаза | Калібрувальний функціонал |
+|------|--------------------------|
+| Фаза 1 | Кнопка auto-zero для `SNT_VPHS_ZERO`; `config/` модуль з NVS |
+| Фаза 2 | MAVLink PARAM протокол (`SNT_VPHS_ZERO`, `SNT_FREQ_MHZ`, `SNT_ANT_SPACE`) |
+| Фаза 3 | MAVLink params для `SNT_KP`, `SNT_CR_PITCH`, `SNT_CR_THRUST` |
+| Фаза 4 | MAVLink params для `SNT_INT_PITCH`, `SNT_INT_THRUST`, `SNT_VMAG_THR` |
+| Фаза 5 | `SNT_VPHS_ZERO2` + auto-zero для elevation |
+
+---
+
+## 11. Залежності (idf_component.yml)
 
 ```yaml
 dependencies:
@@ -305,13 +378,15 @@ dependencies:
 | `bearing/` | Не реалізовано |
 | `navigator/` | Не реалізовано |
 | `mavlink/` | Не реалізовано |
+| `config/` | Не реалізовано (NVS + MAVLink params + auto-zero) |
 | `app_config.h` | Частково (ADC/display константи, потребує розширення) |
 
 ### Передумови для старту Фази 1
 
-Перед початком реалізації `bearing/` необхідно додати до `app_config.h`:
+Перед початком реалізації `bearing/` та `config/` необхідно додати до `app_config.h` (compile-time дефолти):
 - `SENTINEL_FREQ_HZ`
 - `SENTINEL_ANTENNA_SPACING_M`
 - `SENTINEL_VPHS_ZERO_MV`
 - `SENTINEL_ELEVATION_ENABLED`
 - `SENTINEL_SIGNAL_THRESHOLD`
+- `SENTINEL_CAL_BTN_GPIO`
