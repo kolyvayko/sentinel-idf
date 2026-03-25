@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Enable the INTERCEPT state — full-throttle forward pitch on proximity detection. Optionally add VMAG (amplitude) as a second proximity trigger via ADC CH3.
+**Goal:** Enable the INTERCEPT state — full-throttle forward pitch on proximity detection. Optionally add VMAG (amplitude) as a second proximity trigger via ADC CH4.
 
-**Architecture:** The navigator state machine already has INTERCEPT wired as a terminal state. This phase: (1) validates the INTERCEPT attitude command is correct, (2) optionally enables VMAG ADC channel (GPIO3) in `adc/` module, (3) adds VMAG normalisation to `bearing_t`, (4) enables the VMAG proximity threshold in navigator. All VMAG functionality remains behind `SENTINEL_VMAG_ENABLED` flag.
+**Architecture:** The navigator state machine already has INTERCEPT wired as a terminal state. This phase: (1) validates the INTERCEPT attitude command is correct, (2) optionally enables VMAG ADC channel (GPIO4) in `adc/` module, (3) adds VMAG normalisation to `bearing_t`, (4) enables the VMAG proximity threshold in navigator. All VMAG functionality remains behind `SENTINEL_VMAG_ENABLED` flag.
 
 **Tech Stack:** ESP-IDF ≥5.3.0, FreeRTOS.
 
@@ -38,7 +38,7 @@
 ```c
 // --- VMAG (optional proximity channel) ---
 #define SENTINEL_VMAG_ENABLED   0          // set to 1 in Phase 4 field test
-#define SENTINEL_VMAG_ADC_CH    ADC_CHANNEL_3  // GPIO3
+#define SENTINEL_VMAG_ADC_CH    ADC_CHANNEL_4  // GPIO4 (JTAG/MTMS — usable after boot)
 ```
 
 - [ ] **Step 2: Extend adc_sample_t in adc.h**
@@ -50,7 +50,7 @@ The `adc_sample_t` struct is currently defined in `main.c`. Move it to `main/adc
 typedef struct {
     int adc1;   // VPHS azimuth  (ADC CH1, GPIO1)
     int adc2;   // VPHS elevation (ADC CH2, GPIO2)
-    int adc3;   // VMAG optional  (ADC CH3, GPIO3) — 0 if SENTINEL_VMAG_ENABLED=0
+    int adc3;   // VMAG optional  (ADC CH4, GPIO4) — 0 if SENTINEL_VMAG_ENABLED=0
 } adc_sample_t;
 ```
 
@@ -69,7 +69,7 @@ static adc_channel_t channel[2] = {ADC_CHANNEL_1, ADC_CHANNEL_2};
 #endif
 ```
 
-In `adc_read_values()`, route `ADC_CHANNEL_3` results to the `adc3` field:
+In `adc_read_values()`, route `ADC_CHANNEL_4` results to the `adc3` field:
 ```c
 } else if (parsed_data[i].channel == SENTINEL_VMAG_ADC_CH) {
     *adc3 = parsed_data[i].raw_data;
@@ -99,7 +99,7 @@ Expected: `Build successful`
 
 ```bash
 git add main/adc/adc.h main/adc/adc.c main/app_config.h main/main.c main/bearing/bearing.c
-git commit -m "feat(adc): add optional VMAG channel (CH3/GPIO3) to adc_sample_t"
+git commit -m "feat(adc): add optional VMAG channel (CH4/GPIO4) to adc_sample_t"
 ```
 
 ---
