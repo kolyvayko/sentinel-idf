@@ -1,6 +1,6 @@
 // main/config/config.c
 #include "config.h"
-#include "app_config.h"
+#include "../app_config.h"
 #include <nvs_flash.h>
 #include <nvs.h>
 #include <esp_log.h>
