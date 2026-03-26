@@ -1,4 +1,5 @@
 #include "display.h"
+#include "bearing/bearing.h"
 #include <driver/i2c_master.h>
 #include <esp_err.h>
 #include <esp_log.h>
@@ -86,6 +87,21 @@ void display_show_data(ssd1306_handle_t d, int val1, int val2) {
 
   ESP_LOGI(TAG, "Display updated with ADC: %d, %d", val1, val2);
   vTaskDelay(pdMS_TO_TICKS(100)); // Delay 100ms between updates
+}
+
+
+void display_show_bearing(ssd1306_handle_t d, const bearing_t *b, const char *state_str) {
+    if (!d) return;
+    ESP_ERROR_CHECK(ssd1306_clear(d));
+
+    char line1[32];
+    char line2[32];
+    snprintf(line1, sizeof(line1), "AZ:%+.1f EL:%+.1f", b->azimuth_deg, b->elevation_deg);
+    snprintf(line2, sizeof(line2), "%s", state_str);
+
+    ESP_ERROR_CHECK(ssd1306_draw_text_scaled(d, 0, 0,  line1, true, 1));
+    ESP_ERROR_CHECK(ssd1306_draw_text_scaled(d, 0, 16, line2, true, 1));
+    ESP_ERROR_CHECK(ssd1306_display(d));
 }
 
 
