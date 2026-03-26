@@ -4,7 +4,9 @@
 
 **Goal:** ESP32-C6 connects to ArduPilot FC via UART, sends heartbeat, switches FC to GUIDED_NOGPS mode, and implements MAVLink PARAM protocol for all calibration parameters.
 
-**Architecture:** New `mavlink/` module owns the UART connection, heartbeat loop, mode switching, watchdog, and PARAM protocol. `config/` module gains `config_to_mavlink()` and `config_from_mavlink()` for PARAM_SET/PARAM_VALUE serialisation. `mavlink_task` runs independently, receives `nav_cmd_t` from a queue (placeholder — full navigator in Phase 3), and sends heartbeat + handles PARAM requests.
+**FC connection is optional.** If the FC is not connected (no heartbeat received), `mavlink_task` waits silently — no attitude commands are sent. Bearing acquisition and OLED display run regardless of FC connection state. When FC connects, heartbeat exchange begins, mode is set to GUIDED_NOGPS, and attitude commands start flowing. If the FC heartbeat is lost, commands stop until reconnection.
+
+**Architecture:** New `mavlink/` module owns the UART connection, heartbeat loop, mode switching, watchdog, and PARAM protocol. `config/` module gains `config_to_mavlink()` and `config_from_mavlink()` for PARAM_SET/PARAM_VALUE serialisation. `mavlink_task` runs independently, receives `nav_cmd_t` from a queue (placeholder — full navigator in Phase 3), and sends heartbeat + handles PARAM requests. `display_task` reads `mavlink_get_state()` to show FC connection status on the OLED.
 
 **Tech Stack:** ESP-IDF ≥5.3.0, mavlink/c_library_v2 (ArduPilotMega dialect), FreeRTOS UART driver, Unity tests.
 
@@ -589,6 +591,8 @@ idf_component_register(
 
 - [ ] **Step 3: Add mavlink_task creation to main.c**
 
+Add `#include "mavlink/mavlink_task.h"` at top of `main.c`.
+
 In `app_main()`, after existing task creation:
 
 ```c
@@ -597,10 +601,30 @@ xTaskCreate(mavlink_task, "mavlink_task", MAVLINK_TASK_STACK_SIZE,
             NULL, MAVLINK_TASK_PRIORITY, NULL);
 ```
 
-Add at top of `main.c`:
+Also update `display_task` to show FC connection state instead of hardcoded `"SEARCHING"`:
+
 ```c
-#include "mavlink/mavlink_task.h"
+static void display_task(void *param) {
+    ssd1306_handle_t disp = init_display();
+    if (!disp) { ESP_LOGE(TAG, "Display init failed"); vTaskDelete(NULL); return; }
+
+    bearing_t b = {0};
+    for (;;) {
+        if (xQueueReceive(g_bearing_disp_queue, &b, portMAX_DELAY) == pdPASS) {
+            const char *state_str;
+            switch (mavlink_get_state()) {
+                case MAV_CONN_DISCONNECTED:  state_str = "NO FC";   break;
+                case MAV_CONN_CONNECTED:     state_str = "FC OK";   break;
+                case MAV_CONN_GUIDED_NOGPS:  state_str = "GUIDED";  break;
+                default:                     state_str = "?";       break;
+            }
+            display_show_bearing(disp, &b, state_str);
+        }
+    }
+}
 ```
+
+> Note: display always updates regardless of FC state — OLED shows bearing + connection status at all times.
 
 - [ ] **Step 4: Build**
 
