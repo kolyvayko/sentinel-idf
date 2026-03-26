@@ -25,7 +25,7 @@ extern QueueHandle_t g_adc_queue;
 float vphs_to_angle(int adc_raw, float antenna_spacing_m,
                     float freq_hz, float vphs_zero_v) {
     float vphs      = adc_raw * 3.3f / 4095.0f;
-    float delta_phi = (vphs - vphs_zero_v) / vphs_zero_v * M_PI;
+    float delta_phi = (vphs - vphs_zero_v) / SENTINEL_VPHS_MIDPOINT_V * M_PI;
     float lambda    = 3e8f / freq_hz;
     float sin_theta = delta_phi * lambda / (2.0f * M_PI * antenna_spacing_m);
     sin_theta = fmaxf(-1.0f, fminf(1.0f, sin_theta));
