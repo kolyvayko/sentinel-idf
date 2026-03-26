@@ -20,4 +20,8 @@ void     config_set_u16(cfg_param_id_t id, uint16_t value);
 // adc2_raw: current raw ADC reading for elevation channel (ignored if ELEVATION_ENABLED=0).
 void config_auto_zero(int adc1_raw, int adc2_raw);
 
+// FreeRTOS task that monitors the calibration button (GPIO SENTINEL_CAL_BTN_GPIO).
+// param: QueueHandle_t of adc_sample_t — reads latest ADC values for auto-zero.
+void config_btn_task(void *param);
+
 #endif // CONFIG_H

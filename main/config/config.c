@@ -4,6 +4,10 @@
 #include <nvs_flash.h>
 #include <nvs.h>
 #include <esp_log.h>
+#include <driver/gpio.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
+#include <freertos/FreeRTOS.h>
 
 static const char *TAG = "CONFIG";
 static const char *NVS_NS = "sentinel";
@@ -80,6 +84,12 @@ void config_set_u16(cfg_param_id_t id, uint16_t value) {
     }
 }
 
+// Temporary local typedef — matches adc_sample_t in bearing.c; removed in Task 6
+#ifndef ADC_SAMPLE_T_DEFINED
+#define ADC_SAMPLE_T_DEFINED
+typedef struct { int adc1; int adc2; int adc3; } adc_sample_t;
+#endif
+
 void config_auto_zero(int adc1_raw, int adc2_raw) {
     // Clamp to valid 12-bit ADC range
     if (adc1_raw < 0) adc1_raw = 0;
@@ -96,4 +106,53 @@ void config_auto_zero(int adc1_raw, int adc2_raw) {
     config_set_u16(CFG_VPHS_ZERO2_MV, mv2);
     ESP_LOGI(TAG, "auto-zero: EL=%umV", mv2);
 #endif
+}
+
+void config_btn_task(void *param) {
+    QueueHandle_t adc_q = (QueueHandle_t)param;
+
+    gpio_config_t io = {
+        .pin_bit_mask = (1ULL << SENTINEL_CAL_BTN_GPIO),
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_ENABLE,
+    };
+    gpio_config(&io);
+
+    for (;;) {
+        if (gpio_get_level(SENTINEL_CAL_BTN_GPIO) == 0) {
+            // Button pressed (active low) — start hold timer
+            uint32_t held_ms = 0;
+            while (gpio_get_level(SENTINEL_CAL_BTN_GPIO) == 0
+                   && held_ms < SENTINEL_CAL_BTN_HOLD_MS) {
+                vTaskDelay(pdMS_TO_TICKS(50));
+                held_ms += 50;
+            }
+            if (held_ms >= SENTINEL_CAL_BTN_HOLD_MS) {
+                // Average VPHS over 100 ms for a stable zero reading.
+                // Signal must be present during calibration (spec requirement).
+                int64_t sum1 = 0, sum2 = 0;
+                int count = 0;
+                TickType_t start = xTaskGetTickCount();
+                adc_sample_t s = {0};
+                while (((xTaskGetTickCount() - start) * portTICK_PERIOD_MS) < 100) {
+                    if (xQueuePeek(adc_q, &s, pdMS_TO_TICKS(10)) == pdPASS) {
+                        sum1 += s.adc1;
+                        sum2 += s.adc2;
+                        count++;
+                    }
+                }
+                if (count > 0) {
+                    config_auto_zero((int)(sum1 / count), (int)(sum2 / count));
+                    ESP_LOGI(TAG, "auto-zero triggered (%d samples)", count);
+                } else {
+                    ESP_LOGW(TAG, "auto-zero skipped: no ADC signal");
+                }
+                // Wait for button release (debounce)
+                while (gpio_get_level(SENTINEL_CAL_BTN_GPIO) == 0) {
+                    vTaskDelay(pdMS_TO_TICKS(50));
+                }
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 }
