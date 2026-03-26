@@ -87,7 +87,7 @@ void config_set_u16(cfg_param_id_t id, uint16_t value) {
 // Temporary local typedef — matches adc_sample_t in bearing.c; removed in Task 6
 #ifndef ADC_SAMPLE_T_DEFINED
 #define ADC_SAMPLE_T_DEFINED
-typedef struct { int adc1; int adc2; int adc3; } adc_sample_t;
+typedef struct { int adc1; int vmag; int elev_vphs; } adc_sample_t;
 #endif
 
 void config_auto_zero(int adc1_raw, int adc2_raw) {
@@ -137,7 +137,7 @@ void config_btn_task(void *param) {
                 while (((xTaskGetTickCount() - start) * portTICK_PERIOD_MS) < 100) {
                     if (xQueuePeek(adc_q, &s, pdMS_TO_TICKS(10)) == pdPASS) {
                         sum1 += s.adc1;
-                        sum2 += s.adc2;
+                        sum2 += s.elev_vphs;
                         count++;
                     }
                 }

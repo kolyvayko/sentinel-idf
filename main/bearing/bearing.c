@@ -11,7 +11,7 @@
 // Temporary — will be removed when adc_sample_t moves to adc/adc.h in Task 6
 #ifndef ADC_SAMPLE_T_DEFINED
 #define ADC_SAMPLE_T_DEFINED
-typedef struct { int adc1; int adc2; int adc3; } adc_sample_t;
+typedef struct { int adc1; int vmag; int elev_vphs; } adc_sample_t;
 #endif
 
 static const char *TAG = "BEARING";
@@ -24,11 +24,15 @@ extern QueueHandle_t g_adc_queue;
 
 float vphs_to_angle(int adc_raw, float antenna_spacing_m,
                     float freq_hz, float vphs_zero_v) {
+    // AD8302: VPHS is maximum (vphs_zero_v) at 0° phase diff, ~0V at ±180°.
+    // Output is bearing magnitude (0°–90°). Sign determined by sweep in Phase 3.
     float vphs      = adc_raw * 3.3f / 4095.0f;
-    float delta_phi = (vphs - vphs_zero_v) / SENTINEL_VPHS_MIDPOINT_V * M_PI;
+    float rel       = (vphs_zero_v - vphs) / vphs_zero_v;
+    rel             = fmaxf(0.0f, fminf(1.0f, rel));   // clamp: ignore vphs > vphs_zero
+    float delta_phi = M_PI * rel;
     float lambda    = 3e8f / freq_hz;
     float sin_theta = delta_phi * lambda / (2.0f * M_PI * antenna_spacing_m);
-    sin_theta = fmaxf(-1.0f, fminf(1.0f, sin_theta));
+    sin_theta = fmaxf(0.0f, fminf(1.0f, sin_theta));   // magnitude: [0, 1]
     return asinf(sin_theta) * (180.0f / M_PI);
 }
 
@@ -47,7 +51,7 @@ void bearing_task(void *param) {
 
         bearing_t b = {
             .adc1_raw = sample.adc1,
-            .adc2_raw = sample.adc2,
+            .adc2_raw = sample.vmag,
             .azimuth_deg = vphs_to_angle(
                 sample.adc1,
                 SENTINEL_ANTENNA_SPACING_M,
@@ -56,7 +60,7 @@ void bearing_task(void *param) {
             ),
 #if SENTINEL_ELEVATION_ENABLED
             .elevation_deg = vphs_to_angle(
-                sample.adc2,
+                sample.elev_vphs,
                 SENTINEL_ANTENNA_SPACING_M,
                 SENTINEL_FREQ_HZ,
                 config_get_u16(CFG_VPHS_ZERO2_MV) / 1000.0f

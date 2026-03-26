@@ -12,8 +12,7 @@
 // --- Sentinel: Bearing ---
 #define SENTINEL_FREQ_HZ                900e6f
 #define SENTINEL_ANTENNA_SPACING_M      0.165f   // λ/2 @ 900 MHz
-#define SENTINEL_VPHS_ZERO_MV           900      // default 0° calibration (mV)
-#define SENTINEL_VPHS_MIDPOINT_V        0.9f     // AD8302 VPHS at 0° phase (VCC/2, hardware constant)
+#define SENTINEL_VPHS_ZERO_MV           1790     // AD8302 VPHS at 0° phase diff (max output ≈1.79V = 1790mV)
 #define SENTINEL_SIGNAL_THRESHOLD       100      // ADC counts, minimum valid signal
 #define SENTINEL_ELEVATION_ENABLED      0        // Phase 1: horizontal only
 

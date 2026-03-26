@@ -27,7 +27,7 @@ static void adc_task(void *param) {
     adc_sample_t s = {0};
     uint32_t n = 0;
     while (1) {
-        adc_read_values(handle, &s.adc1, &s.adc2);
+        adc_read_values(handle, &s.adc1, &s.vmag);
         n++;
         if ((n % DISPLAY_UPDATE_INTERVAL) == 0) {
             if (xQueueSend(g_adc_queue, &s, 0) != pdPASS) {

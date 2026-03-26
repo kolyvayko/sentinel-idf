@@ -3,36 +3,41 @@
 #include "bearing.h"
 #include <math.h>
 
-// vphs_to_angle at midpoint (zero calibration = actual midpoint) must return 0 degrees
-TEST_CASE("vphs_to_angle: midpoint -> 0 degrees", "[bearing]") {
-    // adc_raw that gives exactly 0.9V: 0.9 / 3.3 * 4095 = 1117
-    float angle = vphs_to_angle(1117, 0.165f, 900e6f, 0.9f);
+// AD8302 VPHS: maximum at 0° phase difference, ~0V at ±180°.
+// vphs_zero_v = 1.79V = calibrated voltage at 0° (maximum VPHS).
+// adc_raw at 1.79V = 1.79/3.3 * 4095 ≈ 2220
+
+// When VPHS equals calibrated max (0° phase diff) → bearing = 0°
+TEST_CASE("vphs_to_angle: vphs_zero input -> 0 degrees", "[bearing]") {
+    float angle = vphs_to_angle(2220, 0.165f, 900e6f, 1.79f);
     TEST_ASSERT_FLOAT_WITHIN(0.5f, 0.0f, angle);
 }
 
-// Full-scale right: VPHS = 1.8V -> adc_raw ~ 2234 -> positive angle
-TEST_CASE("vphs_to_angle: max right -> positive angle", "[bearing]") {
-    float angle = vphs_to_angle(2234, 0.165f, 900e6f, 0.9f);
+// When VPHS is below zero (off-axis) → angle > 0°
+TEST_CASE("vphs_to_angle: vphs below zero -> positive angle", "[bearing]") {
+    float angle = vphs_to_angle(1117, 0.165f, 900e6f, 1.79f);
     TEST_ASSERT_GREATER_THAN(0.0f, angle);
 }
 
-// Full-scale left: VPHS = 0V -> adc_raw = 0 -> negative angle
-TEST_CASE("vphs_to_angle: max left -> negative angle", "[bearing]") {
-    float angle = vphs_to_angle(0, 0.165f, 900e6f, 0.9f);
-    TEST_ASSERT_LESS_THAN(0.0f, angle);
+// When VPHS = 0 (maximum phase diff = maximum off-axis) → maximum angle
+TEST_CASE("vphs_to_angle: vphs=0 -> max positive angle", "[bearing]") {
+    float angle = vphs_to_angle(0, 0.165f, 900e6f, 1.79f);
+    TEST_ASSERT_GREATER_THAN(0.0f, angle);
 }
 
-// Output must be clamped to [-90, +90]
-TEST_CASE("vphs_to_angle: clamps to +/-90 degrees", "[bearing]") {
-    float angle_max = vphs_to_angle(4095, 0.165f, 900e6f, 0.9f);
-    float angle_min = vphs_to_angle(0,    0.165f, 900e6f, 0.9f);
-    TEST_ASSERT_LESS_OR_EQUAL(90.0f,   angle_max);
-    TEST_ASSERT_GREATER_OR_EQUAL(-90.0f, angle_min);
+// Output always in [0, 90] — magnitude only
+TEST_CASE("vphs_to_angle: clamps to [0, 90] degrees", "[bearing]") {
+    float angle_max = vphs_to_angle(0,    0.165f, 900e6f, 1.79f);
+    float angle_zero = vphs_to_angle(4095, 0.165f, 900e6f, 1.79f); // vphs > vphs_zero -> 0
+    TEST_ASSERT_LESS_OR_EQUAL(90.0f, angle_max);
+    TEST_ASSERT_GREATER_OR_EQUAL(0.0f, angle_max);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 0.0f, angle_zero);
 }
 
-// Calibration offset shifts the zero point
-TEST_CASE("vphs_to_angle: calibration offset applied", "[bearing]") {
-    // raw=1117 -> 0.9V; with zero calibrated to 0.95V it should read negative
-    float angle = vphs_to_angle(1117, 0.165f, 900e6f, 0.95f);
-    TEST_ASSERT_LESS_THAN(0.0f, angle);
+// Closer to zero-point = smaller angle
+TEST_CASE("vphs_to_angle: larger rel deviation -> larger angle", "[bearing]") {
+    // raw=2220 (vphs≈vphs_zero) → ~0°; raw=0 (vphs=0) → maximum angle
+    float angle_near  = vphs_to_angle(2220, 0.165f, 900e6f, 1.79f);
+    float angle_far   = vphs_to_angle(0,    0.165f, 900e6f, 1.79f);
+    TEST_ASSERT_GREATER_THAN(angle_near, angle_far);
 }
