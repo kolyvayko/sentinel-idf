@@ -4,10 +4,10 @@
 #include <nvs_flash.h>
 #include <nvs.h>
 #include <esp_log.h>
-#include <driver/gpio.h>
+#include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
-#include <freertos/FreeRTOS.h>
+#include <driver/gpio.h>
 
 static const char *TAG = "CONFIG";
 static const char *NVS_NS = "sentinel";
